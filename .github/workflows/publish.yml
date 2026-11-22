@@ -1,0 +1,39 @@
+name: Publish
+
+# Darpan's code lives in a private repository; this public repository holds
+# only the installers. To publish a version, push a branch named `incoming`
+# containing Darpan-Setup-<version>.exe and NOTES.md (release notes). This
+# workflow creates the release v<version> with that installer (replacing an
+# existing one of the same version) and then deletes the `incoming` branch.
+
+on:
+  push:
+    branches: [incoming]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: incoming
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          f=$(ls Darpan-Setup-*.exe | head -n 1)
+          v=${f#Darpan-Setup-}
+          v=${v%.exe}
+          if gh release view "v$v" > /dev/null 2>&1; then
+            gh release delete "v$v" --cleanup-tag --yes
+          fi
+          gh release create "v$v" "$f" --target main --title "Darpan $v" --notes-file NOTES.md --latest
+
+      - name: Remove the incoming branch
+        if: always()
+        run: git push origin --delete incoming
